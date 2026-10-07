@@ -1,14 +1,17 @@
 """Patchright Chromium browser manager with persistent session support."""
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Any
-from patchright.async_api import async_playwright, BrowserContext, Page, Playwright
+from typing import Any
 
-from ...core.errors import BrowserError, BrowserBusyError
+from patchright.async_api import BrowserContext, Page, Playwright, async_playwright
+
+from ...core.errors import BrowserBusyError, BrowserError
 
 logger = logging.getLogger(__name__)
+
 
 class BrowserManager:
     """Manages the Patchright Chromium instance with persistent context."""
@@ -19,7 +22,7 @@ class BrowserManager:
         headless: bool = True,
         slow_mo: int = 50,
         viewport: dict[str, int] | None = None,
-        executable_path: str | None = None
+        executable_path: str | None = None,
     ):
         self.user_data_dir = Path(user_data_dir)
         self.headless = headless
@@ -27,8 +30,11 @@ class BrowserManager:
         self.viewport = viewport or {"width": 1280, "height": 800}
         self.executable_path = executable_path
 
-        self._playwright: Optional[Playwright] = None
-        self._context: Optional[BrowserContext] = None
+        self._playwright: Playwright | None = None
+        self._context: BrowserContext | None = None
+
+    async def get_context(self) -> BrowserContext:
+        return await self.start()
 
     async def start(self) -> BrowserContext:
         """Launch the persistent Chromium context."""
@@ -40,23 +46,30 @@ class BrowserManager:
             self._playwright = await async_playwright().start()
             launch_args = [
                 "--disable-blink-features=AutomationControlled",
-                "--webrtc-ip-handling-policy=disable_non_proxied_udp"
+                "--webrtc-ip-handling-policy=disable_non_proxied_udp",
             ]
             options: dict[str, Any] = {
                 "user_data_dir": str(self.user_data_dir),
                 "headless": self.headless,
                 "slow_mo": self.slow_mo,
                 "viewport": self.viewport,
-                "args": launch_args
+                "args": launch_args,
             }
             if self.executable_path:
                 options["executable_path"] = self.executable_path
 
-            self._context = await self._playwright.chromium.launch_persistent_context(**options)
-            logger.info("Chromium persistent context launched at %s", self.user_data_dir)
+            self._context = await self._playwright.chromium.launch_persistent_context(
+                **options
+            )
+            logger.info(
+                "Chromium persistent context launched at %s", self.user_data_dir
+            )
             return self._context
         except Exception as e:
-            if "Target page, context or browser has been closed" in str(e) or "lock" in str(e).lower():
+            if (
+                "Target page, context or browser has been closed" in str(e)
+                or "lock" in str(e).lower()
+            ):
                 raise BrowserBusyError(f"Browser profile is currently locked: {e}")
             raise BrowserError(f"Failed to start Patchright browser: {e}")
 
