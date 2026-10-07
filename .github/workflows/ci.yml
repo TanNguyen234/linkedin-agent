@@ -2,30 +2,44 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-asyncio ruff
-      - name: Lint with ruff
+          uv venv
+          uv pip install ruff mypy pytest pytest-asyncio build
+          uv pip install -e .
+
+      - name: Run Ruff Lint
+        run: .venv\Scripts\ruff check .
+
+      - name: Run Mypy Typecheck
+        run: .venv\Scripts\mypy src
+
+      - name: Run Pytest Suite
+        run: .venv\Scripts\pytest -v tests
+
+      - name: Build Package
+        run: uv build
+
+      - name: Test Clean Install
         run: |
-          ruff check .
-      - name: Run test suite
-        run: |
-          pytest -v
-      - name: Test CLI smoke
-        run: |
-          linkedin-agent doctor
+          uv venv test_env
+          uv pip install dist/*.whl --python test_env/Scripts/python.exe
+          test_env/Scripts/linkedin-agent --help

@@ -1,10 +1,6 @@
-# Live Test Report & Safety Gates
+# LIVE TEST REPORT
 
-## Live Read-Only Verification
-- **Local Diagnostics**: System doctor verified all sub-components active.
-- **Session Detection**: Active browser profiles detected in `data/browser_profile/`.
-- **Security Checkpoints**: Zero CAPTCHA circumventions; manual login window fallback supported.
+**LIVE STATUS: NOT VERIFIED**
 
-## Live Write Action Gate
-- **Status**: ARMED / APPROVAL-GATED.
-- **Protocol**: Any live post publishing or outbound messaging requires explicit user preview and an unforgeable HMAC token.
+No live LinkedIn interaction tests have been executed in this session.
+Per safety rules, read-only live tests remain disabled by default unless explicitly executed with `RUN_LIVE_LINKEDIN_TESTS=1`. No write actions (messaging, connect, publish) may be executed without explicit interactive confirmation.

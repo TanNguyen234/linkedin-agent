@@ -1,6 +1,8 @@
 """Unit tests for 5-dimension profile audit engine."""
-from linkedin_agent_suite.core.models import Profile, ExperienceItem
+
+from linkedin_agent_suite.core.models import ExperienceItem, Profile
 from linkedin_agent_suite.intelligence.profile.audit import audit_profile
+
 
 def test_audit_profile_scoring():
     profile = Profile(
@@ -12,10 +14,13 @@ def test_audit_profile_scoring():
             ExperienceItem(
                 title="AI Engineer",
                 company="TechCorp",
-                bullets=["Built agentic workflow reducing latency by 45%", "Scaled system to 100k users"]
+                bullets=[
+                    "Built agentic workflow reducing latency by 45%",
+                    "Scaled system to 100k users",
+                ],
             )
         ],
-        custom_url="linkedin.com/in/test"
+        custom_url="linkedin.com/in/test",
     )
     res = audit_profile(profile, target_role="agentic-ai-systems-engineer")
     assert res["overall"] > 50

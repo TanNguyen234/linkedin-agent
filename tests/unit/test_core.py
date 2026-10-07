@@ -1,11 +1,14 @@
 """Unit tests for config, models, and errors."""
+
 from linkedin_agent_suite.core.config import get_settings
-from linkedin_agent_suite.core.models import Profile, Job
+from linkedin_agent_suite.core.models import Job, Profile
+
 
 def test_settings_load():
     settings = get_settings(reload=True)
     assert settings.app_env in ("development", "production", "test")
     assert settings.data_dir.exists()
+
 
 def test_models():
     p = Profile(full_name="Alice", headline="AI Engineer")

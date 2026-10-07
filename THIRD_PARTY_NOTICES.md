@@ -1,14 +1,15 @@
-# Third-Party Notices & Attribution
+# Third-Party Notices
 
-This project incorporates architectural patterns, data schemas, or algorithms derived from:
+This project incorporates reference implementations and components from:
 
-1. **stickerdaniel/linkedin-mcp-server** (Apache-2.0 License)
-   - Authors: Daniel Sticker and contributors
-   - Contributions: Patchright browser lifecycle patterns, Chromium launch options, DPAPI cookie discovery, and LinkedIn DOM navigation structures.
+1. **stickerdaniel/linkedin-mcp-server**  
+   - License: Apache License 2.0  
+   - Components referenced: LinkedIn DOM selectors, session state detection, and connection/messaging flows.
 
-2. **jcnh74/linkedin-profile-manager-mcp** (MIT License)
-   - Authors: jcnh74 and contributors
-   - Contributions: 5-dimension profile audit formulas, keyword banks, job fit scoring heuristics, and official REST API post payload structures.
+2. **jcnh74/linkedin-profile-manager-mcp**  
+   - License: MIT License  
+   - Components referenced: Profile models and job fields.
 
-3. **Jakeschincariol/linkedin-agent-skill** (MIT License)
-   - Contributions: Editorial humanizer patterns and anti-AI cliché dictionaries.
+3. **Jakeschincariol/linkedin-agent-skill**  
+   - License: MIT License  
+   - Components referenced: Editorial humanizer rules, invisible Unicode character cleanup, and writing quality metrics.
