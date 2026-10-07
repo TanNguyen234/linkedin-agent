@@ -1,49 +1,53 @@
-"""Exception hierarchy for LinkedIn Agent Suite."""
-
+"""Unified Exception hierarchy for LinkedIn Agent Suite."""
 
 class LinkedInAgentError(Exception):
-    """Base exception for all LinkedIn Agent Suite errors."""
-
+    """Base exception for all suite errors."""
+    pass
 
 class ConfigurationError(LinkedInAgentError):
     """Raised when configuration is missing or invalid."""
-
+    pass
 
 class AuthenticationError(LinkedInAgentError):
-    """Raised when user is not logged into LinkedIn."""
-
+    """Raised when user is not logged in or token is invalid."""
+    pass
 
 class CheckpointChallengeError(AuthenticationError):
-    """Raised when LinkedIn presents a security challenge or CAPTCHA."""
-
+    """Raised when LinkedIn presents a security challenge, captcha, or PIN."""
+    pass
 
 class AccountRestrictedError(AuthenticationError):
-    """Raised when LinkedIn account is restricted."""
-
+    """Raised when LinkedIn account has active restriction or ban."""
+    pass
 
 class BrowserError(LinkedInAgentError):
     """Base exception for browser automation failures."""
-
+    pass
 
 class BrowserBusyError(BrowserError):
     """Raised when the browser profile is locked by another process."""
-
+    pass
 
 class NavigationTimeoutError(BrowserError):
     """Raised when navigating to a LinkedIn page times out."""
+    pass
 
-
-class ActionConfirmationRequiredError(LinkedInAgentError):
-    """Raised when an irreversible write action lacks explicit confirmation."""
-
+class ApprovalRequiredError(LinkedInAgentError):
+    """Raised when an irreversible write action lacks explicit valid confirmation."""
+    pass
 
 class RateLimitDetectedError(LinkedInAgentError):
-    """Raised when LinkedIn throttle or rate-limiting behavior is encountered."""
-
+    """Raised when LinkedIn rate limiting is detected."""
+    pass
 
 class ProfileNotFoundError(LinkedInAgentError):
     """Raised when a requested profile does not exist or is private."""
-
+    pass
 
 class JobNotFoundError(LinkedInAgentError):
-    """Raised when a job posting cannot be found or has expired."""
+    """Raised when a job posting cannot be found."""
+    pass
+
+class ContentValidationError(LinkedInAgentError):
+    """Raised when generated content fails factual or quality checks."""
+    pass

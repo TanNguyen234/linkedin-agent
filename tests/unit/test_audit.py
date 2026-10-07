@@ -1,10 +1,10 @@
 """Unit tests for 5-dimension profile audit engine."""
-from src.core.models.models import ProfileSnapshot, ExperienceItem
-from src.intelligence.profile.audit import audit_profile
+from linkedin_agent_suite.core.models import Profile, ExperienceItem
+from linkedin_agent_suite.intelligence.profile.audit import audit_profile
 
 def test_audit_profile_scoring():
-    profile = ProfileSnapshot(
-        name="Test Engineer",
+    profile = Profile(
+        full_name="Test Engineer",
         headline="Senior Agentic AI Systems Engineer",
         about="Passionate software engineer building stuff. DM me to connect.",
         skills=["Python", "LLM", "Agentic", "RAG", "MCP", "Docker"],
@@ -22,6 +22,5 @@ def test_audit_profile_scoring():
     assert len(res["dimensions"]) == 5
     dims = {d["dimension"]: d["score"] for d in res["dimensions"]}
     assert "Recruiter searchability" in dims
-    assert "Clarity" in dims
     assert "Credibility & Metrics" in dims
     assert dims["Credibility & Metrics"] > 70

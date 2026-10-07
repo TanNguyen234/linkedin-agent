@@ -1,0 +1,20 @@
+# Remediation Defect Tracking Report
+
+## Defect Matrix & Resolution Status
+
+| Defect ID | Severity | Category | Description | Root Cause | Status | Verification Evidence |
+|-----------|----------|----------|-------------|------------|--------|-----------------------|
+| `DEF-01` | P0 | Packaging & CLI | Packaging crash: `ModuleNotFoundError: No module named 'src.cli'` on running `linkedin-agent doctor`. | `pyproject.toml` pointed to `src.cli.main:app` which conflicted with package discovery. | **RESOLVED** | Migrated entry point to `linkedin_agent_suite.cli.main:app`, added setuptools find package configuration, verified with editable install and `linkedin-agent doctor`. |
+| `DEF-02` | P0 | Security & Integrity | Silent fallback to `"mock_token"` in official LinkedIn post publishing, producing fake `PUBLISHED` states. | Fallback ternary in post publisher returning mock IDs on missing token. | **RESOLVED** | Removed mock fallback; raises `PermissionError` when posting is disabled and `ValueError` when credentials missing. Tested via `tests/unit/test_official_publish.py`. |
+| `DEF-03` | P0 | Security & Integrity | Write approval tokens were not cryptographically bound to exact action payload. | Approvals generated random tokens or unbound signatures allowing payload tampering. | **RESOLVED** | Implemented HMAC-SHA256 digest over canonicalized JSON payload with expiration and `hmac.compare_digest`. Tested via `tests/unit/test_approvals.py`. |
+| `DEF-04` | P0 | System Diagnostics | `linkedin-agent doctor` hard-coded fake PASS rows without probing real subsystems. | Pure static strings in report table. | **RESOLVED** | Replaced with dynamic probe verifying storage write, SQLite table lifecycle, Patchright importability, and OAuth state. Probed via `linkedin-agent doctor`. |
+| `DEF-05` | P0 / P1 | Browser Engine | `BrowserManager.start()` and `SessionManager.detect_session()` were stubs checking directory existence. | Incomplete skeleton logic without Patchright integration. | **RESOLVED** | Ported real Chromium/Patchright launch routines, arguments, session state detection (`/feed`, `/checkpoint`, `/authwall`), and Windows DPAPI cookie decryptors from `stickerdaniel/linkedin-mcp-server`. |
+| `DEF-06` | P1 | Architectural Duplication | Overlapping package roots in `src/core/` and `src/linkedin_agent_suite/core/`. | Unfinished migration left duplicate models, configs, and storage engines. | **RESOLVED** | Unified into single canonical package `src/linkedin_agent_suite/`. Deleted duplicate roots. Enforced via `tests/regression/test_no_duplicates.py`. |
+| `DEF-07` | P1 | Job & Application Intelligence | Job fit scoring and application preparation fabricated claims and lacked multi-factor evidence grounding. | Uncalibrated keyword counters and hardcoded template strings. | **RESOLVED** | Ported 5-dimension profile audit and interpretable multi-factor job fit scoring from `jcnh74/linkedin-profile-manager-mcp`. Tested via `tests/unit/test_job_ranker.py` and `tests/unit/test_audit.py`. |
+| `DEF-08` | P2 | Content Engine | Content engine fabricated milestones when git diff was empty; humanizer and validator were superficial stubs. | Static fallback strings like `"Feature implementation completed"`. | **RESOLVED** | Implemented evidence-grounded milestone extractor returning `NO_EVIDENCE` when git logs are missing. Hard-gated validator to block unverified claims. Tested via `tests/unit/test_content_engine.py`. |
+| `DEF-09` | P3 | Packaging & Governance | Missing GitHub Actions CI, missing third-party license notices, missing attribution for upstream repositories. | Initial commit lacked repository governance assets. | **RESOLVED** | Added `.github/workflows/ci.yml`, `LICENSE` (MIT), and `THIRD_PARTY_NOTICES.md` acknowledging `stickerdaniel/linkedin-mcp-server`, `jcnh74/linkedin-profile-manager-mcp`, and `linkedin-agent-skill`. |
+
+## Test Verification Summary
+- **Pytest:** 15/15 tests passing (`tests/unit`, `tests/integration`, `tests/regression`)
+- **Linter:** `ruff check .` clean (0 errors)
+- **CLI Diagnostics:** `linkedin-agent doctor` live probes all PASS / NOT_CONFIGURED
