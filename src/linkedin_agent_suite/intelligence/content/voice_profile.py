@@ -1,22 +1,23 @@
-"""Voice profile learner and style parameters."""
-import json
-import os
-from typing import Dict, Any
+"""Adaptive voice profile learning from approved posts."""
 
-DEFAULT_VOICE = {
-    "preferred_language": "English",
-    "tone": "Technical, pragmatic, evidence-based",
-    "sentence_length": "Medium (12-20 words)",
-    "emoji_density": "Low (max 1-2 per post)",
-    "hashtag_density": "Minimal (max 2-3 tags)",
-    "avoid_fluff": True
-}
+from __future__ import annotations
 
-def load_voice_profile(path: str = "data/profile/voice.json") -> Dict[str, Any]:
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return DEFAULT_VOICE
+from typing import Any
+
+
+class VoiceLearner:
+    @staticmethod
+    def compute_voice_profile(posts: list[str]) -> dict[str, Any]:
+        if not posts:
+            return {"style": "default", "avg_words": 150}
+
+        total_words = sum(len(p.split()) for p in posts)
+        avg_words = total_words // len(posts)
+        emoji_count = sum(sum(1 for c in p if ord(c) > 127) for p in posts)
+
+        return {
+            "avg_length_words": avg_words,
+            "emoji_density": round(emoji_count / max(1, total_words), 3),
+            "sample_count": len(posts),
+            "tone": "concise technical" if avg_words < 120 else "narrative technical",
+        }

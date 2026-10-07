@@ -1,9 +1,12 @@
 """Networking workflow: find target -> inspect -> draft outreach."""
-from typing import Tuple
+
 from ..core.models import Profile
 from ..core.security import approvals
 
-def prepare_networking_outreach(target_name: str, target_role: str, target_company: str, my_profile: Profile) -> Tuple[str, str]:
+
+def prepare_networking_outreach(
+    target_name: str, target_role: str, target_company: str, my_profile: Profile
+) -> tuple[str, str]:
     note = (
         f"Hi {target_name},\n\n"
         f"I saw your work at {target_company} and wanted to connect. "

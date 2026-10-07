@@ -1,7 +1,9 @@
 """Spam and duplicate detection."""
-from typing import List
 
-def is_duplicate(new_text: str, recent_posts: List[str], similarity_threshold: float = 0.75) -> bool:
+
+def is_duplicate(
+    new_text: str, recent_posts: list[str], similarity_threshold: float = 0.75
+) -> bool:
     new_words = set(new_text.lower().split())
     if not new_words:
         return False

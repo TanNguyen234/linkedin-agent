@@ -1,98 +1,146 @@
-"""5-Dimension Profile Audit Engine."""
-import re
-from typing import Dict, Any
+"""5-dimension profile audit engine for LinkedIn optimization."""
+
+from typing import Any
+
 from ...core.models import Profile
-from .keywords import ROLE_KEYWORDS, GENERIC_STRONG_SIGNALS, WEAK_PHRASES, keyword_coverage
 
-def clamp(score: float) -> int:
-    return max(0, min(100, int(round(score))))
+TARGET_WEIGHTS = {
+    "headline": 0.25,
+    "about": 0.25,
+    "skills": 0.20,
+    "experience": 0.20,
+    "completeness": 0.10,
+}
 
-def audit_profile(profile: Profile, target_role: str = "agentic-ai-systems-engineer") -> Dict[str, Any]:
-    full_text = "\n".join([
-        profile.headline,
-        profile.about,
-        "\n".join([f"{e.title} {e.company} {' '.join(e.bullets)} {e.description}" for e in profile.experience]),
-        " ".join(profile.skills)
-    ])
-    
-    keywords = ROLE_KEYWORDS.get(target_role, ROLE_KEYWORDS["agentic-ai-systems-engineer"])
-    kw = keyword_coverage(full_text, keywords)
-    
-    skills_bonus = 20 if len(profile.skills) >= 20 else len(profile.skills)
-    searchability_score = clamp(kw["score"] * 0.8 + skills_bonus)
-    searchability = {
-        "dimension": "Recruiter searchability",
-        "score": searchability_score,
-        "findings": [
-            f"Keyword coverage for {target_role}: {kw['score']}% ({len(kw['present'])}/{len(keywords)})",
-            f"Skills listed: {len(profile.skills)} (Target: 20-50)"
-        ],
-        "recommendations": [f"Add missing keywords: {', '.join(kw['missing'][:6])}"] if kw["missing"] else []
-    }
-    
-    headline_len = len(profile.headline)
-    about_words = len(profile.about.split())
-    weak_hits = [p for p in WEAK_PHRASES if p in full_text.lower()]
-    clarity_score = clamp(
-        100 - len(weak_hits) * 12 -
-        (40 if headline_len == 0 else 15 if headline_len > 220 else 0) -
-        (25 if about_words < 50 else 10 if about_words > 500 else 0)
+ROLE_SKILLS = {
+    "agentic-ai-systems-engineer": [
+        "Python",
+        "RAG",
+        "Agentic",
+        "LLM",
+        "Docker",
+        "FastAPI",
+        "TypeScript",
+        "Evaluation",
+    ],
+    "senior-full-stack-engineer": [
+        "TypeScript",
+        "React",
+        "Node.js",
+        "Python",
+        "SQL",
+        "Docker",
+        "AWS",
+        "CI/CD",
+    ],
+    "ai-automation-consultant": [
+        "AI",
+        "Automation",
+        "Zapier",
+        "Make",
+        "Python",
+        "LLM",
+        "Workflow",
+        "Consulting",
+    ],
+    "react-python-php-engineer": [
+        "React",
+        "Python",
+        "PHP",
+        "Laravel",
+        "MySQL",
+        "JavaScript",
+        "HTML",
+        "CSS",
+    ],
+}
+
+
+def audit_profile(
+    profile: Profile, target_role: str = "agentic-ai-systems-engineer"
+) -> dict[str, Any]:
+    expected_skills = ROLE_SKILLS.get(
+        target_role, ROLE_SKILLS["agentic-ai-systems-engineer"]
     )
-    clarity = {
-        "dimension": "Clarity",
-        "score": clarity_score,
-        "findings": [
-            f"Headline length: {headline_len}/220 chars",
-            f"About length: {about_words} words (sweet spot: 150-350)",
-            f"Weak/cliche phrases: {', '.join(weak_hits) if weak_hits else 'None detected'}"
-        ],
-        "recommendations": ["Replace weak phrases with concrete impact."] if weak_hits else []
-    }
-    
-    all_bullets = [b for e in profile.experience for b in e.bullets]
-    with_nums = [b for b in all_bullets if re.search(r"\d", b)]
-    strong_verbs = [b for b in all_bullets if any(b.lower().strip().startswith(v) for v in GENERIC_STRONG_SIGNALS)]
-    
-    credibility_score = 20 if not all_bullets else clamp((len(with_nums) / len(all_bullets)) * 60 + (len(strong_verbs) / len(all_bullets)) * 40)
-    credibility = {
-        "dimension": "Credibility & Metrics",
-        "score": credibility_score,
-        "findings": [
-            f"{len(with_nums)}/{len(all_bullets)} bullets contain metrics",
-            f"{len(strong_verbs)}/{len(all_bullets)} bullets start with strong verbs"
-        ],
-        "recommendations": ["Add quantitative metrics (latency, scale, cost, users) to experience bullets."] if len(with_nums) < len(all_bullets) / 2 else []
-    }
-    
-    ai_kw = keyword_coverage(full_text, ROLE_KEYWORDS["agentic-ai-systems-engineer"])
-    positioning_score = clamp(ai_kw["score"] + (15 if profile.featured_links else 0))
-    positioning = {
-        "dimension": "AI / Engineering Positioning",
-        "score": positioning_score,
-        "findings": [
-            f"AI/agentic keyword coverage: {ai_kw['score']}%",
-            f"Featured links: {len(profile.featured_links)}"
-        ],
-        "recommendations": [f"Weave in AI terms: {', '.join(ai_kw['missing'][:5])}"] if ai_kw["missing"] else []
-    }
-    
-    has_cta = bool(re.search(r"\b(dm|reach out|contact|email|open to|let's talk)\b", profile.about, re.I))
-    conversion_score = clamp((50 if has_cta else 10) + (25 if profile.featured_links else 0) + (25 if profile.custom_url else 0))
-    conversion = {
-        "dimension": "Conversion (CTA)",
-        "score": conversion_score,
-        "findings": [
-            "Clear CTA present in About" if has_cta else "No CTA detected in About",
-            f"Custom URL: {profile.custom_url or 'None'}"
-        ],
-        "recommendations": ["Add clear call to action at the bottom of About."] if not has_cta else []
-    }
-    
-    dimensions = [searchability, clarity, credibility, positioning, conversion]
-    overall = clamp(sum(d["score"] for d in dimensions) / len(dimensions))
-    
+    profile_skills_lower = [s.lower() for s in profile.skills]
+
+    # 1. Headline Score
+    headline_score = 0
+    if profile.headline:
+        headline_score += 40
+        if any(kw.lower() in profile.headline.lower() for kw in expected_skills[:3]):
+            headline_score += 40
+        if len(profile.headline) > 30:
+            headline_score += 20
+    headline_score = min(100, headline_score)
+
+    # 2. About Score
+    about_score = 0
+    if profile.about:
+        about_score += 30
+        if len(profile.about) >= 150:
+            about_score += 40
+        if any(
+            term in profile.about.lower()
+            for term in ["build", "architect", "lead", "engineer", "develop"]
+        ):
+            about_score += 30
+    about_score = min(100, about_score)
+
+    # 3. Skills Score
+    matched_skills = [s for s in expected_skills if s.lower() in profile_skills_lower]
+    skills_score = int((len(matched_skills) / max(1, len(expected_skills))) * 100)
+    skills_score = min(100, skills_score)
+
+    # 4. Experience Score
+    exp_score = 0
+    if profile.experience:
+        exp_score += 40
+        has_metrics = False
+        for exp in profile.experience:
+            text = f"{exp.description} {' '.join(exp.bullets)}"
+            if any(char.isdigit() for char in text):
+                has_metrics = True
+                break
+        if has_metrics:
+            exp_score += 40
+        if len(profile.experience) >= 2:
+            exp_score += 20
+    exp_score = min(100, exp_score)
+
+    # 5. Completeness Score
+    comp_score = 0
+    if profile.full_name:
+        comp_score += 20
+    if profile.headline:
+        comp_score += 20
+    if profile.about:
+        comp_score += 20
+    if profile.skills:
+        comp_score += 20
+    if profile.experience:
+        comp_score += 20
+
+    overall = int(
+        headline_score * TARGET_WEIGHTS["headline"]
+        + about_score * TARGET_WEIGHTS["about"]
+        + skills_score * TARGET_WEIGHTS["skills"]
+        + exp_score * TARGET_WEIGHTS["experience"]
+        + comp_score * TARGET_WEIGHTS["completeness"]
+    )
+
     return {
-        "target_role": target_role,
         "overall": overall,
-        "dimensions": dimensions
+        "target_role": target_role,
+        "dimensions": [
+            {"dimension": "Recruiter searchability", "score": headline_score},
+            {"dimension": "Structural clarity", "score": about_score},
+            {
+                "dimension": "Role keyword density",
+                "score": skills_score,
+                "matched": matched_skills,
+            },
+            {"dimension": "Credibility & Metrics", "score": exp_score},
+            {"dimension": "Action-oriented language", "score": comp_score},
+        ],
     }
