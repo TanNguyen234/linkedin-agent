@@ -1,4 +1,5 @@
 """Database migration runner with schema versioning."""
+
 import sqlite3
 
 LATEST_SCHEMA_VERSION = 2
@@ -58,12 +59,15 @@ MIGRATIONS = {
             scheduled_time TEXT
         );
         UPDATE schema_version SET version = 2;
-    """
+    """,
 }
+
 
 def apply_migrations(db_path: str):
     with sqlite3.connect(db_path) as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);"
+        )
         row = conn.execute("SELECT version FROM schema_version LIMIT 1;").fetchone()
         current_version = row[0] if row else 0
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -49,7 +49,7 @@ class SanitizingFilter(logging.Filter):
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
     """Configure structured, sanitized file and console logging."""
     settings = get_settings()
-    log_file = settings.logs_dir / f"agent_{datetime.now(timezone.utc).strftime('%Y%m%d')}.log"
+    log_file = settings.logs_dir / f"agent_{datetime.now(UTC).strftime('%Y%m%d')}.log"
 
     root_logger = logging.getLogger("linkedin_agent_suite")
     root_logger.setLevel(level)
@@ -94,7 +94,7 @@ def log_action(
 ) -> None:
     """Structured action audit helper."""
     dur_str = f" duration={duration:.2f}s" if duration is not None else ""
-    err_str = f" error=\"{error}\"" if error else ""
+    err_str = f' error="{error}"' if error else ""
     msg = f"workflow={workflow} action={action} target={target} status={status}{dur_str}{err_str}"
     if status == "SUCCESS":
         logger.info(msg)
@@ -102,3 +102,8 @@ def log_action(
         logger.error(msg)
     else:
         logger.warning(msg)
+
+def sanitize_log_message(msg: str) -> str:
+    for pat in _SECRET_PATTERNS:
+        msg = pat.sub("[REDACTED]", msg)
+    return msg

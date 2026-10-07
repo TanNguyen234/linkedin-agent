@@ -1,72 +1,62 @@
-"""Unified configuration management."""
+"""Configuration management for LinkedIn Agent Suite."""
+
 from __future__ import annotations
 
 from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    """Global configuration settings for LinkedIn Agent Suite."""
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    app_env: str = Field(default="development", description="Application environment")
-    data_dir: Path = Field(default=Path("data"), description="Path to data directory")
-    logs_dir: Path = Field(default=Path("logs"), description="Path to logs directory")
-
-    # Browser & Automation
-    browser_executable: str | None = Field(default=None, description="Path to custom Chrome / Edge binary")
+    app_env: str = Field(default="development", alias="APP_ENV")
+    logs_dir: Path = Field(default_factory=lambda: Path("data/logs"), alias="LOGS_DIR")
+    data_dir: Path = Field(default_factory=lambda: Path("data"), alias="DATA_DIR")
     browser_user_data_dir: Path = Field(
-        default=Path("data/browser_profile"),
-        description="Directory for persistent browser session & cookies",
+        default_factory=lambda: Path("data/browser_profile"),
+        alias="BROWSER_USER_DATA_DIR",
     )
-    headless: bool = Field(default=True, description="Run browser in headless mode")
-    browser_timeout_ms: int = Field(default=30000, description="Default page navigation timeout in ms")
-    slow_mo_ms: int = Field(default=100, description="Delay between actions in ms")
-    require_action_confirmation: bool = Field(
-        default=True,
-        description="Whether write actions require explicit interactive approval",
+    browser_headless: bool = Field(default=True, alias="BROWSER_HEADLESS")
+    browser_slow_mo_ms: int = Field(default=50, alias="BROWSER_SLOW_MO_MS")
+    browser_timeout_ms: int = Field(default=30000, alias="BROWSER_TIMEOUT_MS")
+
+    # Official API Configuration
+    linkedin_access_token: str | None = Field(
+        default=None, alias="LINKEDIN_ACCESS_TOKEN"
     )
+    linkedin_author_urn: str | None = Field(default=None, alias="LINKEDIN_AUTHOR_URN")
+    linkedin_api_version: str = Field(default="202401", alias="LINKEDIN_API_VERSION")
 
-    # Official LinkedIn API
-    linkedin_access_token: str = Field(default="", description="OAuth token with w_member_social scope")
-    enable_official_posting: bool = Field(default=False, description="Explicit flag allowing official API posts")
-    linkedin_api_version: str = Field(default="202506", description="LinkedIn REST API Version header")
+    # LLM Configuration
+    llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
+    llm_model: str = Field(default="gemini-1.5-flash", alias="LLM_MODEL")
+    llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
 
-    # Content Auto-publish Guardrails
-    autopublish_enabled: bool = Field(default=False, description="Autonomous post publishing (strictly OFF by default)")
-    max_posts_per_day: int = Field(default=2, description="Daily publishing budget cap")
+    # Autopublish Guardrails
+    autopublish_enabled: bool = Field(default=False, alias="AUTOPUBLISH_ENABLED")
+    max_posts_per_day: int = Field(default=2, alias="MAX_POSTS_PER_DAY")
+    allowed_posting_start: int = Field(default=8, alias="ALLOWED_POSTING_START")
+    allowed_posting_end: int = Field(default=18, alias="ALLOWED_POSTING_END")
+    min_content_score: float = Field(default=75.0, alias="MIN_CONTENT_SCORE")
+    min_evidence_score: float = Field(default=80.0, alias="MIN_EVIDENCE_SCORE")
+    topic_cooldown_days: int = Field(default=7, alias="TOPIC_COOLDOWN_DAYS")
 
-    # LLM Provider Configuration
-    llm_provider: str = Field(default="mock", description="LLM provider: gemini, openai, local, or mock")
-    llm_model: str = Field(default="default", description="Model name")
-    llm_api_key: str = Field(default="", description="LLM API key")
+    approval_hmac_secret: str | None = Field(default=None, alias="APPROVAL_HMAC_SECRET")
 
-    # Job Intelligence APIs
-    remotive_api_url: str = Field(default="https://remotive.com/api/remote-jobs", description="Remotive API URL")
-    remoteok_api_url: str = Field(default="https://remoteok.com/api", description="RemoteOK API URL")
-    default_target_role: str = Field(default="agentic-ai-systems-engineer", description="Default role")
 
-    def resolve_paths(self, base_dir: Path | None = None) -> None:
-        root = base_dir or Path.cwd()
-        if not self.data_dir.is_absolute():
-            self.data_dir = (root / self.data_dir).resolve()
-        if not self.logs_dir.is_absolute():
-            self.logs_dir = (root / self.logs_dir).resolve()
-        if not self.browser_user_data_dir.is_absolute():
-            self.browser_user_data_dir = (root / self.browser_user_data_dir).resolve()
+_settings_instance: Settings | None = None
 
-_cached_settings: Settings | None = None
 
 def get_settings(reload: bool = False) -> Settings:
-    global _cached_settings
-    if _cached_settings is None or reload:
-        _cached_settings = Settings()
-        _cached_settings.resolve_paths()
-        _cached_settings.data_dir.mkdir(parents=True, exist_ok=True)
-        _cached_settings.logs_dir.mkdir(parents=True, exist_ok=True)
-        _cached_settings.browser_user_data_dir.mkdir(parents=True, exist_ok=True)
-    return _cached_settings
+    global _settings_instance
+    if reload or _settings_instance is None:
+        _settings_instance = Settings()
+        _settings_instance.data_dir.mkdir(parents=True, exist_ok=True)
+        _settings_instance.browser_user_data_dir.mkdir(parents=True, exist_ok=True)
+    return _settings_instance
