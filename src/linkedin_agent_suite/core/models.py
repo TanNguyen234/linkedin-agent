@@ -151,3 +151,14 @@ class MessageThread(BaseModel):
     participants: list[str] = Field(default_factory=list)
     last_message: str | None = None
     unread_count: int = 0
+
+
+class PublishResult(BaseModel):
+    status: str
+    post_urn: str | None = None
+    http_status: int | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    is_confirmed: bool = False
+    published_at: str | None = None
+
