@@ -2,7 +2,7 @@
 
 import sqlite3
 
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 
 MIGRATIONS = {
     1: """
@@ -60,7 +60,18 @@ MIGRATIONS = {
         );
         UPDATE schema_version SET version = 2;
     """,
+    3: """
+        ALTER TABLE applications ADD COLUMN role TEXT DEFAULT '';
+        ALTER TABLE applications ADD COLUMN url TEXT DEFAULT '';
+        ALTER TABLE applications ADD COLUMN fit_score REAL DEFAULT 0.0;
+        ALTER TABLE applications ADD COLUMN date_discovered TEXT DEFAULT '';
+        ALTER TABLE applications ADD COLUMN date_applied TEXT DEFAULT '';
+        UPDATE applications SET role = title WHERE (role IS NULL OR role = '') AND title IS NOT NULL;
+        UPDATE applications SET url = apply_url WHERE (url IS NULL OR url = '') AND apply_url IS NOT NULL;
+        UPDATE schema_version SET version = 3;
+    """,
 }
+
 
 
 def apply_migrations(db_path: str):
