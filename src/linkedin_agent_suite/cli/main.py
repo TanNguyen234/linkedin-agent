@@ -31,8 +31,21 @@ from ..linkedin.session.cookie_importer import CookieImporter
 from ..linkedin.session.manager import SessionManager, SessionState
 from .doctor import run_diagnostics
 
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 app = typer.Typer(help="LinkedIn Agent Suite Unified Control CLI")
-console = Console()
+console = Console(legacy_windows=False)
 
 
 @app.command()
@@ -141,7 +154,9 @@ app.add_typer(profile_app, name="profile")
 
 
 @profile_app.command("me")
-def profile_me():
+def profile_me(
+    save: bool = typer.Option(True, "--save/--no-save", help="Save profile snapshot to data/my_profile.json"),
+):
     """Fetch authenticated user's own profile."""
     settings = get_settings()
 
@@ -158,7 +173,16 @@ def profile_me():
         console.print(f"[bold green]Name:[/bold green] {p.full_name}")
         console.print(f"[bold cyan]Headline:[/bold cyan] {p.headline}")
         console.print(f"[dim]Location: {p.location}[/dim]")
-        console.print(f"[bold]Skills ({len(p.skills)}):[/bold] {', '.join(p.skills[:8])}")
+        if p.education:
+            console.print(f"[dim]Education: {', '.join(e.school for e in p.education)}[/dim]")
+        console.print(f"[bold]Skills ({len(p.skills)}):[/bold] {', '.join(p.skills)}")
+        if p.about:
+            console.print(f"\n[bold]About:[/bold]\n{p.about}")
+        if save:
+            settings.data_dir.mkdir(parents=True, exist_ok=True)
+            out_file = settings.data_dir / "my_profile.json"
+            out_file.write_text(json.dumps(p.model_dump(), indent=2, ensure_ascii=False), encoding="utf-8")
+            console.print(f"\n[dim]Profile snapshot saved to: {out_file}[/dim]")
     except Exception as e:
         console.print(f"[red]Failed to fetch profile:[/red] {e}")
 
@@ -194,11 +218,14 @@ def profile_audit(
     ),
 ):
     """Audit profile match and completeness for target role."""
-    if file and file.exists():
-        data = json.loads(file.read_text(encoding="utf-8"))
+    settings = get_settings()
+    target_file = file or (settings.data_dir / "my_profile.json")
+
+    if target_file and target_file.exists():
+        data = json.loads(target_file.read_text(encoding="utf-8"))
         profile = Profile(**data)
     else:
-        console.print("[red]Error: Profile file is required for audit. Provide a valid JSON snapshot via '--file <path>'.[/red]")
+        console.print("[red]Error: Profile file is required for audit. Run 'profile me' first or provide '--file <path>'.[/red]")
         raise typer.Exit(1)
 
     result = audit_profile(profile, target_role=role)
@@ -217,11 +244,14 @@ def profile_optimize(
     ),
 ):
     """Suggest high-impact keyword optimizations for target role."""
-    if file and file.exists():
-        data = json.loads(file.read_text(encoding="utf-8"))
+    settings = get_settings()
+    target_file = file or (settings.data_dir / "my_profile.json")
+
+    if target_file and target_file.exists():
+        data = json.loads(target_file.read_text(encoding="utf-8"))
         profile = Profile(**data)
     else:
-        console.print("[red]Error: Provide a profile JSON via '--file <path>' to generate optimizations.[/red]")
+        console.print("[red]Error: Provide a profile JSON via '--file <path>' or run 'profile me' first.[/red]")
         raise typer.Exit(1)
 
     text = profile.full_text()
