@@ -8,7 +8,7 @@ from typing import Any
 def validate_claims(text: str, source_facts: list[str] | None = None, *args: Any, **kwargs: Any) -> tuple[bool, list[str]]:
     """Verify metrics, revenue, benchmark, and deployment claims."""
     warnings: list[str] = []
-    
+
     # 1. Metric / Percentage claims without evidence
     pct_matches = re.findall(r'\b(\d+%(?:\s*-\s*\d+%)?)\b', text)
     if pct_matches:
