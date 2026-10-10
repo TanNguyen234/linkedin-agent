@@ -104,7 +104,13 @@ def session_login(
             iterations = max(1, timeout // 2)
             for _ in range(iterations):
                 await asyncio.sleep(2)
-                state = await sess.detect_session_state(page)
+                target_page = page
+                if context.pages:
+                    for p in reversed(context.pages):
+                        if not p.is_closed():
+                            target_page = p
+                            break
+                state = await sess.detect_session_state(target_page)
                 if state == SessionState.AUTHENTICATED:
                     console.print("[bold green]Successfully authenticated![/bold green] Session saved to persistent profile.")
                     return True

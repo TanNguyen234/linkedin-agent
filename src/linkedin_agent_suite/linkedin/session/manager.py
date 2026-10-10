@@ -67,24 +67,43 @@ class SessionManager:
             ):
                 return SessionState.AUTHWALL
 
-            # 4. Login Required
-            if "/login" in url or "/checkpoint/lg/login-submit" in url:
-                return SessionState.LOGIN_REQUIRED
-            if await page.query_selector(
+            # 4. Check for active login form inputs
+            has_login_fields = await page.query_selector(
                 '#username, #password, input[name="session_key"]'
-            ):
-                return SessionState.LOGIN_REQUIRED
+            )
 
-            # 5. Authenticated Signals
-            # Must have global nav or primary navigation AND avatar/profile button, without login fields
+            # 5. Check cookies for li_at token (gold standard LinkedIn session proof)
+            has_li_at = False
+            try:
+                cookies = await page.context.cookies(["https://www.linkedin.com", "https://linkedin.com"])
+                has_li_at = any(
+                    c.get("name") == "li_at" and len(c.get("value", "")) > 10
+                    for c in cookies
+                )
+            except Exception as e:
+                logger.debug("Failed reading cookies: %s", e)
+
+            # If li_at cookie exists and we are not on an active login error page, we are authenticated
+            if has_li_at and not (("/login" in url or "/checkpoint/lg/login-submit" in url) and has_login_fields):
+                return SessionState.AUTHENTICATED
+
+            # 6. Authenticated DOM & URL Signals
             has_nav = await page.query_selector(
-                '#global-nav, nav[aria-label="Primary"], .global-nav'
+                '#global-nav, nav[aria-label*="Primary" i], nav[aria-label*="chính" i], .global-nav, header.global-nav'
             )
             has_me = await page.query_selector(
-                '.global-nav__me, button[aria-label*="Me"], .nav-item--profile'
+                '.global-nav__me, button[aria-label*="Me" i], button[aria-label*="Tôi" i], .nav-item--profile, img.global-nav__me-photo'
             )
-            if has_nav or (has_me and "/feed" in url):
+            is_feed_or_home = any(
+                p in url for p in ["/feed", "/in/", "/mynetwork", "/jobs", "/messaging", "/notifications"]
+            )
+
+            if has_nav or has_me or (is_feed_or_home and not has_login_fields):
                 return SessionState.AUTHENTICATED
+
+            # 7. Login Required
+            if ("/login" in url or "/checkpoint/lg/login-submit" in url) or has_login_fields:
+                return SessionState.LOGIN_REQUIRED
 
             return SessionState.UNKNOWN
         finally:
