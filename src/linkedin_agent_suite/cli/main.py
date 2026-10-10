@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -30,8 +31,6 @@ from ..linkedin.profiles.service import ProfileService
 from ..linkedin.session.cookie_importer import CookieImporter
 from ..linkedin.session.manager import SessionManager, SessionState
 from .doctor import run_diagnostics
-
-import sys
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
