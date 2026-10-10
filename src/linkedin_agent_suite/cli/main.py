@@ -84,7 +84,9 @@ def session_status():
 
 
 @session_app.command("login")
-def session_login():
+def session_login(
+    timeout: int = typer.Option(300, "--timeout", "-t", help="Timeout in seconds for manual login (default: 300s)."),
+):
     """Launch headed browser to allow manual human login to LinkedIn and store persistent session."""
     settings = get_settings()
     console.print("[bold cyan]Launching headed browser for LinkedIn manual login...[/bold cyan]")
@@ -97,9 +99,10 @@ def session_login():
             page = await context.new_page()
             await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
 
-            console.print("[yellow]Waiting for authentication (polling up to 120s)...[/yellow]")
+            console.print(f"[yellow]Waiting for authentication (polling up to {timeout}s)...[/yellow]")
             sess = SessionManager(mgr)
-            for _ in range(60):
+            iterations = max(1, timeout // 2)
+            for _ in range(iterations):
                 await asyncio.sleep(2)
                 state = await sess.detect_session_state(page)
                 if state == SessionState.AUTHENTICATED:
