@@ -22,3 +22,10 @@ class DuplicateDetector:
             if overlap >= threshold:
                 return True
         return False
+
+
+def is_duplicate_content(
+    new_text: str, historical_posts: list[str], threshold: float = 0.75
+) -> bool:
+    """Convenience functional helper for duplicate checking."""
+    return DuplicateDetector.is_duplicate(new_text, historical_posts, threshold)

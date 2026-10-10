@@ -1,4 +1,4 @@
-"""Real LinkedIn Job search and extraction service."""
+"""Real LinkedIn Job search and extraction service without fabricated fallback data."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class JobService:
 
             state = await self.session.detect_session_state(page)
             if state in (SessionState.CHECKPOINT, SessionState.ACCOUNT_RESTRICTED):
-                logger.error(f"Cannot search jobs: session state is {state}")
+                logger.error("Cannot search jobs: session state is %s", state)
                 return []
 
             try:
@@ -48,19 +48,9 @@ class JobService:
             jobs: list[Job] = []
 
             for card in cards[:limit]:
-                # ID extraction
                 job_id = await card.get_attribute(
                     "data-occludable-job-id"
                 ) or await card.get_attribute("data-job-id")
-
-                title_elem = await card.query_selector(
-                    ".job-card-list__title, a.job-card-container__link, .base-search-card__title"
-                )
-                title = (
-                    (await title_elem.inner_text()).strip()
-                    if title_elem
-                    else "Job Title"
-                )
 
                 link_elem = await card.query_selector(
                     "a.job-card-container__link, a.base-card__full-link"
@@ -72,14 +62,17 @@ class JobService:
                 if not job_id:
                     continue
 
+                title_elem = await card.query_selector(
+                    ".job-card-list__title, a.job-card-container__link, .base-search-card__title"
+                )
+                title = (await title_elem.inner_text()).strip() if title_elem else ""
+                if not title:
+                    continue
+
                 company_elem = await card.query_selector(
                     ".job-card-container__primary-description, .base-search-card__subtitle, .job-card-container__company-name"
                 )
-                company = (
-                    (await company_elem.inner_text()).strip()
-                    if company_elem
-                    else "Company"
-                )
+                company = (await company_elem.inner_text()).strip() if company_elem else ""
 
                 loc_elem = await card.query_selector(
                     ".job-card-container__metadata-item, .job-search-card__location"
@@ -99,7 +92,7 @@ class JobService:
                         title=title,
                         company=company,
                         location=loc,
-                        url=str(job_url or f"https://www.linkedin.com/jobs/view/{job_id}/"),
+                        url=str(job_url),
                         source="linkedin",
                     )
                 )
@@ -108,7 +101,7 @@ class JobService:
             await page.close()
 
     async def get_job(self, job_id_or_url: str) -> Job | None:
-        """Fetch details for a specific LinkedIn job posting."""
+        """Fetch details for a specific LinkedIn job posting without fake fallbacks."""
         url = (
             job_id_or_url
             if job_id_or_url.startswith("http")
@@ -118,17 +111,19 @@ class JobService:
         page = await context.new_page()
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+
             title_el = await page.query_selector(
                 "h1.job-details-jobs-unified-top-card__job-title, h1.top-card-layout__title"
             )
-            title = (await title_el.inner_text()).strip() if title_el else "Unknown Job"
+            title = (await title_el.inner_text()).strip() if title_el else ""
 
             comp_el = await page.query_selector(
                 ".job-details-jobs-unified-top-card__company-name, .topcard__org-name-link"
             )
-            company = (
-                (await comp_el.inner_text()).strip() if comp_el else "Unknown Company"
-            )
+            company = (await comp_el.inner_text()).strip() if comp_el else ""
+
+            if not title and not company:
+                return None
 
             desc_el = await page.query_selector(
                 "#job-details, .jobs-description-content__text"
@@ -140,8 +135,12 @@ class JobService:
             )
             apply_url = await apply_el.get_attribute("href") if apply_el else url
 
+            job_id = job_id_or_url.split("/")[-1].split("?")[0]
+            if not job_id:
+                job_id = "job"
+
             return Job(
-                id=job_id_or_url.split("/")[-1].split("?")[0],
+                id=job_id,
                 title=title,
                 company=company,
                 description=desc,

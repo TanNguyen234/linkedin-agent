@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ...core.errors import ExtractionError
 from ...core.models import EducationItem, ExperienceItem, Profile
 from ..browser.manager import BrowserManager
-from ..session.manager import SessionManager
+from ..session.manager import SessionManager, SessionState
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ class ProfileService:
                 wait_until="domcontentloaded",
                 timeout=25000,
             )
+            state = await self.session.detect_session_state(page)
+            if state != SessionState.AUTHENTICATED:
+                raise ExtractionError(f"Cannot fetch profile; session state is {state.value}")
+
             url = page.url
             identifier = (
                 url.split("/in/")[1].split("/")[0].split("?")[0]
@@ -38,7 +43,7 @@ class ProfileService:
             await page.close()
 
     async def get_profile(self, identifier: str, page: Any | None = None) -> Profile:
-        """Fetch deep profile information from LinkedIn page."""
+        """Fetch deep profile information from LinkedIn page without fabricated fallbacks."""
         should_close = False
         if page is None:
             context = await self.browser.get_context()
@@ -52,103 +57,97 @@ class ProfileService:
             await page.goto(url, wait_until="domcontentloaded", timeout=25000)
 
         try:
-            # 1. Basic header info
-            name_el = await page.query_selector("h1, .text-heading-xlarge")
-            full_name = (
-                (await name_el.inner_text()).strip() if name_el else "LinkedIn Member"
-            )
+            state = await self.session.detect_session_state(page)
+            if state in (SessionState.LOGIN_REQUIRED, SessionState.AUTHWALL, SessionState.CHECKPOINT):
+                raise ExtractionError(f"LinkedIn session challenge encountered: {state.value}")
 
-            headline_el = await page.query_selector(".text-body-medium.break-words")
+            # 1. Basic header info - Never use fabricated 'LinkedIn Member'
+            name_el = await page.query_selector("h1, .text-heading-xlarge")
+            full_name = (await name_el.inner_text()).strip() if name_el else ""
+
+            headline_el = await page.query_selector(
+                ".text-body-medium.break-words, div[data-generated-suggestion-target]"
+            )
             headline = (await headline_el.inner_text()).strip() if headline_el else ""
 
             loc_el = await page.query_selector(
-                ".text-body-small.inline.t-black--light.break-words"
+                "span.text-body-small.inline.t-black--light.break-words"
             )
             location = (await loc_el.inner_text()).strip() if loc_el else ""
 
             # 2. About section
-            about_el = await page.query_selector(
-                "#about ~ div .inline-show-more-text, section:has(#about) .display-flex"
-            )
-            about = (await about_el.inner_text()).strip() if about_el else ""
+            about = ""
+            about_el = await page.query_selector("#about ~ .display-flex .inline-show-more-text")
+            if about_el:
+                about = (await about_el.inner_text()).strip()
 
             # 3. Experience section
-            exp_items: list[ExperienceItem] = []
+            experiences: list[ExperienceItem] = []
             exp_elements = await page.query_selector_all(
-                "section:has(#experience) li.artdeco-list__item"
+                "#experience ~ .pvs-list__outer-container > ul > li"
             )
             for el in exp_elements:
-                title_el = await el.query_selector(
-                    ".mr1.t-bold span[aria-hidden='true']"
-                )
-                comp_el = await el.query_selector(
-                    ".t-14.t-normal span[aria-hidden='true']"
-                )
-                time_el = await el.query_selector(
-                    ".t-14.t-normal.t-black--light span[aria-hidden='true']"
+                title_el = await el.query_selector(".t-bold span[aria-hidden='true']")
+                company_el = await el.query_selector(".t-normal span[aria-hidden='true']")
+                duration_el = await el.query_selector(
+                    ".t-black--light span[aria-hidden='true']"
                 )
                 desc_el = await el.query_selector(".inline-show-more-text")
-                if title_el or comp_el:
-                    exp_items.append(
+
+                exp_title = (await title_el.inner_text()).strip() if title_el else ""
+                exp_company = (await company_el.inner_text()).strip() if company_el else ""
+                exp_duration = (await duration_el.inner_text()).strip() if duration_el else None
+                exp_desc = (await desc_el.inner_text()).strip() if desc_el else ""
+
+                if exp_title or exp_company:
+                    experiences.append(
                         ExperienceItem(
-                            title=(await title_el.inner_text()).strip()
-                            if title_el
-                            else "",
-                            company=(await comp_el.inner_text()).strip()
-                            if comp_el
-                            else "",
-                            duration=(await time_el.inner_text()).strip()
-                            if time_el
-                            else None,
-                            description=(await desc_el.inner_text()).strip()
-                            if desc_el
-                            else "",
+                            title=exp_title,
+                            company=exp_company,
+                            duration=exp_duration,
+                            description=exp_desc,
                         )
                     )
 
             # 4. Education section
-            edu_items: list[EducationItem] = []
+            education: list[EducationItem] = []
             edu_elements = await page.query_selector_all(
-                "section:has(#education) li.artdeco-list__item"
+                "#education ~ .pvs-list__outer-container > ul > li"
             )
             for el in edu_elements:
-                school_el = await el.query_selector(
-                    ".mr1.t-bold span[aria-hidden='true']"
-                )
-                deg_el = await el.query_selector(
-                    ".t-14.t-normal span[aria-hidden='true']"
-                )
-                if school_el:
-                    edu_items.append(
+                school_el = await el.query_selector(".t-bold span[aria-hidden='true']")
+                degree_el = await el.query_selector(".t-normal span[aria-hidden='true']")
+                school_name = (await school_el.inner_text()).strip() if school_el else ""
+                degree_name = (await degree_el.inner_text()).strip() if degree_el else None
+                if school_name:
+                    education.append(
                         EducationItem(
-                            school=(await school_el.inner_text()).strip(),
-                            degree=(await deg_el.inner_text()).strip()
-                            if deg_el
-                            else None,
+                            school=school_name,
+                            degree=degree_name,
                         )
                     )
 
             # 5. Skills section
             skills: list[str] = []
             skill_elements = await page.query_selector_all(
-                "section:has(#skills) li.artdeco-list__item, section:has(#skills) .hoverable-link-text"
+                "#skills ~ .pvs-list__outer-container > ul > li .t-bold span[aria-hidden='true']"
             )
             for el in skill_elements:
-                s_name = (await el.inner_text()).strip()
-                if s_name and len(s_name) < 50 and s_name not in skills:
-                    skills.append(s_name)
+                s_text = (await el.inner_text()).strip()
+                if s_text and s_text not in skills:
+                    skills.append(s_text)
 
-            return Profile(
-                username=identifier,
+            profile = Profile(
                 full_name=full_name,
                 headline=headline,
                 location=location,
                 about=about,
-                experience=exp_items,
-                education=edu_items,
                 skills=skills,
-                profile_url=f"https://www.linkedin.com/in/{identifier}/",
+                experience=experiences,
+                education=education,
+                profile_url=page.url,
             )
+            return profile
         finally:
             if should_close:
                 await page.close()
