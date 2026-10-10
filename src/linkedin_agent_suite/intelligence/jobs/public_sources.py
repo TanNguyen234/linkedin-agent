@@ -55,3 +55,20 @@ class PublicJobSources:
         except Exception:
             pass
         return []
+
+
+def fetch_public_ai_jobs(keywords: str = "", limit: int = 10) -> list[Job]:
+    """Synchronous wrapper fetching public remote jobs."""
+    import anyio
+
+    async def _fetch():
+        jobs = await PublicJobSources.fetch_remotive(limit=limit)
+        if not jobs:
+            jobs = await PublicJobSources.fetch_remoteok(limit=limit)
+        return jobs
+
+    try:
+        return anyio.run(_fetch)
+    except Exception:
+        return []
+

@@ -5,7 +5,12 @@ class LinkedInAgentError(Exception):
     """Base exception for all suite errors."""
 
 
+class ExtractionError(LinkedInAgentError):
+    """Raised when DOM data extraction fails or encounters a challenge."""
+
+
 class ConfigurationError(LinkedInAgentError):
+
     """Raised when configuration is missing or invalid."""
 
 

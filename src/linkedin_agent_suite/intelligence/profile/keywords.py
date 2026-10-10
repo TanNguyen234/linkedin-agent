@@ -185,3 +185,14 @@ def extract_keywords_from_jd(jd: str, limit: int = 40) -> list[str]:
         candidates = [k for k, v in counts.items() if v >= 1]
     sorted_kws = sorted(candidates, key=lambda k: counts[k], reverse=True)
     return sorted_kws[:limit]
+
+
+def optimize_keywords(text: str, target_role: str = "agentic-ai-systems-engineer") -> dict[str, Any]:
+    role_kws = ROLE_KEYWORDS.get(target_role, ROLE_KEYWORDS.get("agentic-ai-systems-engineer", []))
+    cov = keyword_coverage(text, role_kws)
+    return {
+        "density": float(cov["score"]),
+        "present": cov["present"],
+        "missing": cov["missing"],
+    }
+
