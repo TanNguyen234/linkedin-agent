@@ -1,4 +1,4 @@
-"""Dynamic system diagnostics probing real browser and configured LLM."""
+"""Dynamic system diagnostics probing real browser, session state, and configured LLM."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from rich.table import Table
 
 from ..core.config import get_settings
 from ..core.storage.database import LocalDatabase
+from ..linkedin.browser.manager import BrowserManager
+from ..linkedin.session.manager import SessionManager, SessionState
 
 
 def run_diagnostics() -> Table:
@@ -45,6 +47,7 @@ def run_diagnostics() -> Table:
         table.add_row("SQLite Read/Write", "[red]FAIL[/red]", str(e))
 
     # 4. Patchright Driver & Live Browser Launch
+    browser_available = False
     try:
         import patchright.async_api as patchright_api
 
@@ -63,6 +66,7 @@ def run_diagnostics() -> Table:
         loop.close()
 
         if browser_launch_ok:
+            browser_available = True
             table.add_row(
                 "Patchright Browser",
                 "[green]PASS[/green]",
@@ -87,13 +91,14 @@ def run_diagnostics() -> Table:
                 "Patchright Browser", "[red]FAIL[/red]", f"Browser probe failed: {err_msg[:60]}"
             )
 
-    # 5. Persistent Profile Status
+    # 5. Persistent Browser Profile on Disk
     profile_dir = settings.browser_user_data_dir
-    if profile_dir.exists() and any(profile_dir.iterdir()):
+    has_profile_files = profile_dir.exists() and any(profile_dir.iterdir())
+    if has_profile_files:
         table.add_row(
             "Persistent Profile",
-            "[green]PASS[/green]",
-            f"Profile exists: {profile_dir}",
+            "[green]CONFIGURED[/green]",
+            f"Profile files present at {profile_dir}",
         )
     else:
         table.add_row(
@@ -102,12 +107,47 @@ def run_diagnostics() -> Table:
             "No stored session profile. Run 'linkedin-agent session login'",
         )
 
-    # 6. Official Posts API
+    # 6. Real LinkedIn Session Authentication Detection
+    if browser_available and has_profile_files:
+        try:
+            async def probe_session():
+                mgr = BrowserManager(user_data_dir=profile_dir, headless=True)
+                sess = SessionManager(mgr)
+                state = await sess.detect_session_state()
+                await mgr.close()
+                return state
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            session_state = loop.run_until_complete(probe_session())
+            loop.close()
+
+            if session_state == SessionState.AUTHENTICATED:
+                table.add_row("LinkedIn Session", "[green]AUTHENTICATED[/green]", "Active authenticated LinkedIn session detected")
+            elif session_state == SessionState.LOGIN_REQUIRED:
+                table.add_row("LinkedIn Session", "[yellow]LOGIN_REQUIRED[/yellow]", "Unauthenticated. Run 'linkedin-agent session login'")
+            elif session_state == SessionState.CHECKPOINT:
+                table.add_row("LinkedIn Session", "[red]CHECKPOINT[/red]", "Security challenge / CAPTCHA encountered")
+            elif session_state == SessionState.ACCOUNT_RESTRICTED:
+                table.add_row("LinkedIn Session", "[red]RESTRICTED[/red]", "Account restriction detected on LinkedIn")
+            else:
+                table.add_row("LinkedIn Session", "[yellow]UNKNOWN[/yellow]", f"State: {session_state.value}")
+        except Exception as e:
+            table.add_row("LinkedIn Session", "[yellow]PROBE_FAILED[/yellow]", str(e)[:60])
+    else:
+        table.add_row(
+            "LinkedIn Session",
+            "[yellow]NOT_CONFIGURED[/yellow]",
+            "Cannot probe session without browser binary and persistent profile",
+        )
+
+    # 7. Official Posts API
     if settings.linkedin_access_token:
+        status_api = "[green]CONFIGURED[/green]" if settings.enable_official_posting else "[yellow]TOKEN_PRESENT_POSTING_DISABLED[/yellow]"
         table.add_row(
             "Official Posts API",
-            "[green]PASS[/green]",
-            f"Configured (API Version: {settings.linkedin_api_version})",
+            status_api,
+            f"Token set, API Version: {settings.linkedin_api_version}, Posting Enabled: {settings.enable_official_posting}",
         )
     else:
         table.add_row(
@@ -116,7 +156,7 @@ def run_diagnostics() -> Table:
             "No LINKEDIN_ACCESS_TOKEN provided (Optional)",
         )
 
-    # 7. LLM Provider Probing
+    # 8. LLM Provider Probing
     provider = settings.llm_provider.lower()
     if provider == "mock":
         table.add_row(
@@ -129,7 +169,7 @@ def run_diagnostics() -> Table:
         if key:
             table.add_row(
                 "LLM Provider",
-                "[green]PASS[/green]",
+                "[green]CONFIGURED[/green]",
                 f"Gemini configured ({settings.llm_model})",
             )
         else:
@@ -143,7 +183,7 @@ def run_diagnostics() -> Table:
         if key:
             table.add_row(
                 "LLM Provider",
-                "[green]PASS[/green]",
+                "[green]CONFIGURED[/green]",
                 f"OpenAI configured ({settings.llm_model})",
             )
         else:
@@ -155,7 +195,7 @@ def run_diagnostics() -> Table:
     elif provider in ("local", "ollama"):
         table.add_row(
             "LLM Provider",
-            "[green]PASS[/green]",
+            "[green]CONFIGURED[/green]",
             f"Local LLM provider configured ({settings.llm_model})",
         )
     elif provider in ("none", ""):

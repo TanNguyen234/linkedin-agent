@@ -1,8 +1,7 @@
 """Live browser test with Chrome DevTools Protocol (CDP) inspection."""
 
-import asyncio
 import logging
-from pathlib import Path
+
 import pytest
 
 from linkedin_agent_suite.linkedin.browser.manager import BrowserManager
