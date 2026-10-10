@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -42,36 +43,60 @@ class BrowserManager:
         if self._context:
             return self._context
 
-        try:
-            self._playwright = await async_playwright().start()
-            launch_args = [
-                "--disable-blink-features=AutomationControlled",
-                "--webrtc-ip-handling-policy=disable_non_proxied_udp",
-            ]
-            options: dict[str, Any] = {
-                "user_data_dir": str(self.user_data_dir),
-                "headless": self.headless,
-                "slow_mo": self.slow_mo,
-                "viewport": self.viewport,
-                "args": launch_args,
-            }
-            if self.executable_path:
-                options["executable_path"] = self.executable_path
+        retries = 3
+        for attempt in range(retries):
+            try:
+                self._playwright = await async_playwright().start()
+                launch_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+                ]
+                options: dict[str, Any] = {
+                    "user_data_dir": str(self.user_data_dir),
+                    "headless": self.headless,
+                    "slow_mo": self.slow_mo,
+                    "viewport": self.viewport,
+                    "args": launch_args,
+                }
+                if self.executable_path:
+                    options["executable_path"] = self.executable_path
 
-            self._context = await self._playwright.chromium.launch_persistent_context(
-                **options
-            )
-            logger.info(
-                "Chromium persistent context launched at %s", self.user_data_dir
-            )
-            return self._context
-        except Exception as e:
-            if (
-                "Target page, context or browser has been closed" in str(e)
-                or "lock" in str(e).lower()
-            ):
-                raise BrowserBusyError(f"Browser profile is currently locked: {e}")
-            raise BrowserError(f"Failed to start Patchright browser: {e}")
+                self._context = await self._playwright.chromium.launch_persistent_context(
+                    **options
+                )
+                logger.info(
+                    "Chromium persistent context launched at %s", self.user_data_dir
+                )
+                return self._context
+            except Exception as e:
+                if self._playwright:
+                    try:
+                        await self._playwright.stop()
+                    except Exception:
+                        pass
+                    self._playwright = None
+
+                is_busy = (
+                    "Target page, context or browser has been closed" in str(e)
+                    or "lock" in str(e).lower()
+                    or "processsingleton" in str(e).lower()
+                )
+                if is_busy and attempt < retries - 1:
+                    logger.warning(
+                        "Browser profile busy or locked (attempt %d/%d). Retrying in 2s...",
+                        attempt + 1,
+                        retries,
+                    )
+                    await asyncio.sleep(2.0)
+                    continue
+
+                if is_busy:
+                    raise BrowserBusyError(
+                        f"Browser profile is currently locked: {e}. "
+                        f"Ensure no other Chromium process is accessing '{self.user_data_dir}'."
+                    )
+                raise BrowserError(f"Failed to start Patchright browser: {e}")
+        raise BrowserBusyError(f"Failed to acquire browser profile at '{self.user_data_dir}' after retries.")
 
     async def get_page(self) -> Page:
         """Get an active page from context, or create a new one."""
